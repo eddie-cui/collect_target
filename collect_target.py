@@ -7,8 +7,10 @@ import yaml
 import importlib
 import json
 import h5py
+from tqdm import tqdm
 import traceback
 import os
+import torch
 import time
 from argparse import ArgumentParser
 def class_decorator(task_name):
@@ -22,21 +24,20 @@ def class_decorator(task_name):
 
 
 def get_embodiment_config(robot_file):
-    robot_config_file = os.path.join(robot_file, "config.yml")
+    robot_config_file = os.path.join('/data/sea_disk0/cuihz/RoboTwin/assets/embodiments/aloha-agilex/', "config.yml")
     with open(robot_config_file, "r", encoding="utf-8") as f:
         embodiment_args = yaml.load(f.read(), Loader=yaml.FullLoader)
     return embodiment_args
 
 def collect_target(folder_path, task_config='demo_clean'):
-    config_path = f"./task_config/{task_config}.yml"
+    config_path = f"/data/sea_disk0/cuihz/RoboTwin/task_config/{task_config}.yml"
 
     with open(config_path, "r", encoding="utf-8") as f:
         args = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-    args['task_name'] = task_name
 
     embodiment_type = args.get("embodiment")
-    embodiment_config_path = os.path.join(CONFIGS_PATH, "_embodiment_config.yml")
+    embodiment_config_path = os.path.join('/data/sea_disk0/cuihz/RoboTwin/task_config/', "_embodiment_config.yml")
 
     with open(embodiment_config_path, "r", encoding="utf-8") as f:
         _embodiment_types = yaml.load(f.read(), Loader=yaml.FullLoader)
@@ -68,17 +69,19 @@ def collect_target(folder_path, task_config='demo_clean'):
         embodiment_name = str(embodiment_type[0]) + "+" + str(embodiment_type[1])
     args["embodiment_name"] = embodiment_name
     args['task_config'] = task_config
-    robot = Robot(args)
+    robot = Robot(**args)
     fk = DualArmFK()
-    for file in os.listdir(folder_path):
-        if not file.endswith('.h5'):
+    file_name_list = os.listdir(folder_path)
+    for file in tqdm(file_name_list, desc="Processing files"):
+        print(f"Processing file: {file}")
+        if not file.endswith('.hdf5'):
             continue
         file_path = os.path.join(folder_path, file)
-        with h5py.File(file_path, 'r+') as hf:
-            target_joint_left = hf['joint_action/left_arm']
-            target_joint_right = hf['joint_action/right_arm']
-        base_fk_left = fk.fk.get_fk_left(torch.tensor(target_joint_left,device='cuda',dtype=torch.float32))
-        base_fk_right = fk.fk.get_fk_right(torch.tensor(target_joint_right,device='cuda',dtype=torch.float32))
+        with h5py.File(file_path, 'r') as hf:
+            target_joint_left = hf['joint_action/left_arm'][:]
+            target_joint_right = hf['joint_action/right_arm'][:]
+        base_fk_left = fk.get_fk_left(torch.tensor(target_joint_left,device='cuda',dtype=torch.float32))
+        base_fk_right = fk.get_fk_right(torch.tensor(target_joint_right,device='cuda',dtype=torch.float32))
         target_left_endpose = []
         target_right_endpose = []
         for i in range(base_fk_left.shape[0]):
@@ -86,11 +89,30 @@ def collect_target(folder_path, task_config='demo_clean'):
             world_fk_right = robot.right_base_to_world_pose(base_fk_right[i])
             target_left_endpose.append(robot.get_fk_left_endpose(world_fk_left))
             target_right_endpose.append(robot.get_fk_right_endpose(world_fk_right))
-        #write back to hdf5
         with h5py.File(file_path, 'r+') as hf:
-            if 'target_endpose/left_arm' in hf:
-                del hf['target_endpose/left_arm']
-            if 'target_endpose/right_arm' in hf:
-                del hf['target_endpose/right_arm']
-            hf.create_dataset('target_endpose/left_arm', data=np.array(target_left_endpose))
-            hf.create_dataset('target_endpose/right_arm', data=np.array(target_right_endpose))
+            grp = hf.require_group('target_endpose')
+            if 'left_arm' in grp:
+                del grp['left_arm']
+            if 'right_arm' in grp:
+                del grp['right_arm']
+
+            grp.create_dataset('left_arm',  data=target_left_endpose)
+            grp.create_dataset('right_arm', data=target_right_endpose)
+        
+if __name__ == "__main__":
+    collect_target_folder = '/data/sea_disk0/cuihz/collect_target/move_pillbottle_pad/demo_clean/data/'
+    collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/move_pillbottle_pad/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/place_bread_basket/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/place_bread_skillet/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/place_fan/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/place_shoe/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/rotate_qrcode/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")
+    # collect_target_folder = '/data/sea_disk0/wushr/3D-Policy/RoboTwin_modified/data/stamp_seal/demo_clean/data'
+    # collect_target(collect_target_folder, "demo_clean")

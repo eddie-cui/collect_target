@@ -9,9 +9,9 @@ class DualArmFK:
     def __init__(self, config_path_left=None, config_path_right=None):
         self.tensor_args = TensorDeviceType()
         if config_path_left is None:
-            config_path_left = "/data/cuihz/RoboTwin2.0_3D_policy/assets/embodiments/aloha-agilex/curobo_left.yml"
+            config_path_left = "/data/sea_disk0/cuihz/RoboTwin/assets/embodiments/aloha-agilex/curobo_left.yml"
         if config_path_right is None:
-            config_path_right = "/data/cuihz/RoboTwin2.0_3D_policy/assets/embodiments/aloha-agilex/curobo_right.yml"
+            config_path_right = "/data/sea_disk0/cuihz/RoboTwin/assets/embodiments/aloha-agilex/curobo_right.yml"
         config_file_left = load_yaml(config_path_left)
         urdf_file_left = config_file_left["robot_cfg"]["kinematics"]["urdf_path"]
         base_link_left = config_file_left["robot_cfg"]["kinematics"]["base_link"]
